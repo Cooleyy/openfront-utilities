@@ -1,0 +1,148 @@
+OpenFront Hotkeys Script – Context and Design Notes
+
+Last updated: 2025-08-09
+Repo: openfront-hotkeys
+Primary script: openfront_hotkeys.js (userscript injected on openfront.io)
+
+Summary
+- This userscript adds keyboard hotkeys to rapidly place structures and launch nukes in the browser game OpenFront.io.
+- It simulates the in-game “build menu” open + click flow at the current mouse location to build/place selected structures, invisibly, without disrupting normal gameplay.
+- It supports: one build per key tap; rapid sequential builds for fast tapping; and a “turbo” mode after holding a key for a threshold, which performs repeated builds.
+
+About the game (OpenFront.io) – relevant client behaviors
+- The client is a web app (TypeScript/JS) that renders a game canvas and layered UI (custom elements like <build-menu>, radial menus, etc.).
+- Camera/zoom/pan is handled by TransformHandler and InputHandler (wheel/pinch and keybinds Q/E/C by default). Scale/offset changes affect what you see.
+- The build menu appears when the player Ctrl/Meta + clicks (or through the game’s logic). The menu is a custom element <build-menu> with a shadow DOM containing buttons. Each button contains an <img> whose src includes a recognizable asset filename (e.g., CityIconWhite.svg, MIRVIcon.svg, etc.).
+- The game determines whether a build button is enabled/disabled based on current mouse location and resources. If disabled, clicking does nothing visible and the button has disabled=true.
+- Relevant asset names used in the UI for matching (examples): CityIconWhite, PortIcon, BattleshipIconWhite, MissileSiloIconWhite, ShieldIconWhite, SamLauncherIconWhite, NukeIconWhite, MushroomCloudIconWhite, MIRVIcon.
+
+What this userscript does
+1) Hotkey mapping
+   - The HOTKEYS map (by KeyboardEvent.code) defines a target structure/nuke and whether Shift is required. Current mapping:
+     - KeyC → City (CityIconWhite)
+     - KeyQ → Port (PortIcon)
+     - KeyW → Warship (BattleshipIconWhite)
+     - KeyS → Missile Silo (MissileSiloIconWhite)
+     - KeyD → Defense Post (ShieldIconWhite)
+     - KeyZ → SAM Launcher (SamLauncherIconWhite)
+     - KeyR (Shift) → Atom Bomb (NukeIconWhite)
+     - KeyF (Shift) → Hydrogen Bomb (MushroomCloudIconWhite)
+     - KeyV (Shift) → MIRV (MIRVIcon)
+   - If a hotkey requires Shift but Shift is not pressed (or vice versa), it ignores the event.
+   - It ignores the event if focused in INPUT/TEXTAREA or if Ctrl/Meta/Alt modifiers are present (to avoid conflicting with game/global shortcuts).
+
+2) Mouse tracking
+   - The script continuously tracks mouseX/mouseY (client coordinates) and uses that point as the build target location.
+
+3) Per-key state and turbo mode
+   - For each key code, it tracks whether the key is currently pressed, the timestamp of the initial press, and any scheduled timers for turbo mode.
+   - Constants:
+     - RAPID_BUILD_THRESHOLD = 1000 ms (hold duration before turbo starts)
+     - RAPID_BUILD_INTERVAL = 100 ms (repeat rate during turbo)
+   - Behavior:
+     - On initial keydown: executes a single build immediately.
+     - If the key remains held for >= RAPID_BUILD_THRESHOLD, starts setInterval to build every RAPID_BUILD_INTERVAL.
+     - On keyup: clears timers and stops turbo.
+   - Design goal: single press = exactly one build; rapid tapping = one build per tap; holding for > threshold = many builds.
+
+4) Opening the build menu invisibly and clicking the right button
+   - To trigger the build menu quickly, the script simulates a Ctrl/Meta + pointerdown and pointerup on the canvas at (mouseX, mouseY). This mirrors how the game opens the menu.
+   - A MutationObserver watches for <build-menu> insertion (shadowRoot). When found, the script temporarily hides it visually but keeps it interactive:
+     - buildMenu.style.transition = 'none';
+     - buildMenu.style.opacity = '0.01'; (almost invisible)
+     - buildMenu.style.pointerEvents = 'auto';
+   - It then queries all shadowRoot buttons, finds the one whose <img src> contains the icon token from HOTKEYS (e.g., "MIRVIcon"), and clicks it if not disabled.
+   - If the build menu doesn’t appear quickly, there’s a fallback timeout (currently 80ms) to query it anyway and proceed.
+
+5) Handling invalid build locations
+   - If the matched button exists but is disabled (e.g., not enough resources or invalid placement location), the script logs it and does NOT click.
+   - Note: The script leaves the menu in a minimal opacity state for hotkey-driven attempts, so manual use remains unaffected (there is additional logic to restore the menu if the user manually uses Ctrl/Meta click).
+
+6) Manual Ctrl/Meta click compatibility
+   - When the user manually Ctrl/Meta-clicks, the script ensures the menu remains visible (it restores opacity/transition/pointerEvents) so normal usage isn’t disrupted.
+
+Key technical details (script structure)
+- File: openfront_hotkeys.js
+- It’s a userscript (Tampermonkey/Greasemonkey compatible) that runs at document-end on openfront.io and localhost dev domains.
+- Event listeners:
+  - mousemove: track cursor position
+  - keydown: detect and handle hotkey logic; preventDefault and ignore if modifiers/inputs
+  - keyup: stop per-key turbo timers
+  - pointerdown/pointerup: special handling to keep manual Ctrl/Meta clicks user-friendly (restore visibility if the script previously hid the menu)
+- performSingleBuild(hotkey):
+  - Finds the canvas; dispatches PointerEvents (pointerdown + small delay + pointerup) with Ctrl (Windows/Linux) or Meta (Mac) at (mouseX, mouseY)
+  - Starts a MutationObserver on document.body for <build-menu>
+  - When found: hides menu visually (opacity 0.01) but keeps it interactive; then clickBuildingButton()
+  - Fallback timer queries the menu anyway after ~80ms
+- clickBuildingButton(buildMenu, hotkey):
+  - Queries all shadowRoot buttons; matches target by img.src.includes(hotkey.icon)
+  - If button exists and enabled, calls button.click()
+  - If disabled or not found, logs details for debugging
+- isHotkeyTriggered flag is used to differentiate script-driven actions from manual ones when restoring menu visibility.
+
+Known design constraints & pitfalls
+- Menu trigger method: Currently uses pointerdown + pointerup with Ctrl/Meta to mimic the game’s build menu opening. This can briefly set the game’s “pointerDown” state. Under turbo with mouse movement, this may interact with the game’s drag/zoom logic. If zoom/pan jitter appears, an alternative is to try using only a Ctrl/Meta pointerup (some builds may still require pointerdown depending on game logic) or to trigger the internal ShowBuildMenuEvent directly if it’s exposed—however, that would couple to internal code and event bus types.
+- Icon matching: The script matches by substring in the image URL (img.src.includes(hotkey.icon)). This is resilient to hashed filenames (the final bundle also exposes friendly names in the path), but if asset names change, update HOTKEYS icon tokens accordingly. Verified names include MIRVIcon (not MirvIconWhite).
+- Disabled state linger: If a build is invalid, the game’s menu can remain in a state where subsequent builds may appear blocked. Hiding the menu to opacity 0.01 keeps it interactive; a more aggressive approach is to explicitly send Escape to close the menu after an invalid attempt, but that changes UX (was considered but not applied in code at this time).
+- Key propagation: If the game binds Q/E/C for zoom/center, ensure those are disabled in-game or the userscript should stopPropagation for handled hotkeys. The current script prevents default and filters modifiers; if you see camera zoom while hotkeys are held and the mouse moves during turbo, consider stopping propagation for handled hotkeys.
+- Turbo intervals: RAPID_BUILD_INTERVAL = 100ms and threshold = 1000ms are conservative. Faster rates risk racing menu open/close animations or server cooldowns.
+
+Extending or modifying the script
+- Add a new hotkey:
+  1) Choose a KeyboardEvent.code (e.g., "KeyX").
+  2) Find the asset token used by the build menu button’s <img src> (search OpenFrontIO repo for the icon import/name under src/client/graphics/layers/BuildMenu.ts and static images). Use a distinctive substring.
+  3) Add to HOTKEYS: 'KeyX': { icon: 'YourIconName', name: 'Your Name', shift: true/false }.
+- Change turbo behavior:
+  - Adjust RAPID_BUILD_THRESHOLD (when turbo starts) and RAPID_BUILD_INTERVAL (repeat rate).
+  - If you need per-action cooldown, wrap performSingleBuild() with your own queue/debounce.
+- Improve menu detection:
+  - If build menu opening becomes slower, increase fallback timeout (currently 80ms) or rely more on MutationObserver.
+  - If the menu’s DOM structure changes, update clickBuildingButton() selectors.
+- Stabilize camera during turbo:
+  - If camera zoom/pan still occurs specifically during turbo + mouse move, consider:
+    a) Triggering only a modifier pointerup instead of pointerdown+up (requires testing against current game version).
+    b) Temporarily stopping propagation of wheel/gesture events during turbo (be careful: this blocks user zoom globally, which may be undesired).
+    c) Stopping propagation for handled keydown/keyup if in-game keybinds conflict.
+- Closing the build menu on invalid attempts (optional enhancement):
+  - After detecting targetButton.disabled, call a helper that restores styles and dispatches Escape key events to close the menu, so the next hotkey press tries from a clean state.
+
+How to debug issues
+- Open browser devtools console; the script logs:
+  - Hotkey press details
+  - Build menu detection and number of buttons
+  - Which buttons were found and whether the target was disabled
+- To inspect the menu: temporarily comment out the opacity/pointerEvents changes to see the menu and verify which button maps to which img filename.
+- To verify assets: in the OpenFrontIO repo, grep for icon imports in src/client/graphics/layers/BuildMenu.ts and look under resources/images or static/images.
+
+Assumptions
+- The main canvas exists and the build menu is rendered as <build-menu> under document.body.
+- The shadowRoot of <build-menu> contains <button> elements with an <img> child whose src string contains an identifying token.
+- Ctrl (Windows/Linux) or Meta (Mac) modifiers open the build menu when used in the pointer events.
+
+Security & safety
+- The script does not send network requests; it only simulates pointer/keyboard events and manipulates DOM styles.
+- It runs on openfront.io and localhost dev hosts as configured in the userscript metadata.
+
+Changelog notes (high-level)
+- Initial: hotkeys and invisible menu clicker.
+- Added per-key turbo (hold > 1s → repeat every 100ms).
+- Updated MIRV icon token to MIRVIcon to match actual asset naming in the game.
+- Added robust MutationObserver + fallback for menu detection.
+- Left hooks/comments to optionally close the menu on invalid build (not enabled by default).
+
+Contact points in OpenFrontIO for reference (not part of this repo)
+- BuildMenu.ts: defines button/icon wiring used by the build menu UI.
+- InputHandler.ts: processes wheel, key, pointer events; emits ZoomEvent, DragEvent, ShowBuildMenuEvent, etc.
+- TransformHandler.ts: applies scale and offset for camera; zoom logic is visible here.
+- styles.css and related component CSS: may include transform: scale() animations for menus that could visually “zoom.”
+
+Quick orientation for an LLM modifying this script later
+- The main control flow starts in keydown → performSingleBuild → MutationObserver → clickBuildingButton.
+- State and timers per key are in keyState and are cleared in keyup.
+- If you change how the menu is opened, keep in mind:
+  - Using pointerdown sets pointerDown in the game, which makes mouse move generate DragEvents. That can interact with camera.
+  - Using only pointerup with modifiers may open the menu without engaging dragging; test both approaches.
+- Any change that relies on specific internal events (e.g., dispatching ShowBuildMenuEvent directly) will couple the script to game internals and may break with updates; prefer DOM/UI triggers.
+
+End of file.
+
