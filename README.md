@@ -1,302 +1,123 @@
-# OpenFront Utilities - Developer Context for LLMs
+# OpenFront Utilities
 
-This repository contains helper scripts and utilities for the browser game **OpenFront.io**. This README provides essential context for LLMs working on OpenFront-related development tasks.
+A collection of Tampermonkey userscripts that enhance the [OpenFront.io](https://openfront.io) browser game experience.
 
 ## About OpenFront.io
 
-OpenFront.io is a real-time strategy browser game built with TypeScript/JavaScript. Players compete to control territory, manage resources (gold, troops), build structures, and wage warfare on a shared map.
+OpenFront.io is a real-time strategy browser game where players compete to control territory, manage resources (gold and troops), build structures, and engage in warfare on a shared map. The game features:
 
+- **Resource Management**: Gold for building, troops for combat
+- **Strategic Building**: Cities, ports, missile silos, defense posts, SAM launchers
+- **Warfare Systems**: Nuclear weapons, conventional attacks, alliances, embargos
+- **Real-time Gameplay**: Continuous updates at ~10 ticks per second
 
-### Key Game Concepts
-- **Resources**: Players have gold (for building) and troops (for attacking/defending)
-- **Structures**: Cities, ports, missile silos, defense posts, SAM launchers, etc.
-- **Warfare**: Nuclear weapons, conventional attacks, alliances, embargos
-- **Real-time**: Game state updates continuously, ~10 ticks per second
+## Available Scripts
 
-## Understanding the Game's Technical Architecture
+### 🎯 OpenFront Hotkeys
+**File**: `openfront-hotkeys/openfront_hotkeys.user.js`
 
-### Game Code Location
-code location /mnt/c/Users/Jason/Documents/Repos/OpenFrontIO1
-The main OpenFront.io game code is located in the **OpenFrontIO** repository (sibling to this repo). Key directories:
-- `src/client/` - Browser-side game logic and UI
-- `src/core/` - Shared game logic (client/server)
-- `src/server/` - Server-side game management
+**Features**:
+- Keyboard shortcuts for rapid building (C=City, Q=Port, S=Silo, etc.)
+- Nuclear weapon hotkeys (Shift+R=Atom Bomb, Shift+F=Hydrogen Bomb)
+- Turbo mode for continuous building while holding keys
+- Invisible build menu manipulation for seamless gameplay
 
-### Important Files for Script Development
+**Usage**: Press and hold hotkeys to build structures quickly at your mouse position.
 
-**Client-Side UI Components** (LitElement-based):
-- `src/client/graphics/layers/ControlPanel.ts` - Player resource display (gold, troops)
-- `src/client/graphics/layers/BuildMenu.ts` - Building placement menu
-- `src/client/graphics/layers/PlayerPanel.ts` - Player information display
-- `src/client/graphics/layers/GameLeftSidebar.ts` - Leaderboards
-- `src/client/graphics/layers/GameRightSidebar.ts` - Game controls
+### 🔊 OpenFront Warnings
+**File**: `openfront-warnings/openfront_gold_warning.user.js`
 
-**Core Game Logic**:
-- `src/core/game/PlayerImpl.ts` - Player state and methods (gold, troops, buildings)
-- `src/core/game/GameImpl.ts` - Main game state management
-- `src/core/game/GameView.ts` - Client-side game state interface
-- `src/client/Utils.ts` - Utility functions like `renderNumber()` for formatting
+**Features**:
+- Audio alerts when your gold reaches critical thresholds
+- Customizable warning levels (default: 125k gold)
+- Game state detection to only alert during active games
+- Web Audio API integration for reliable sound generation
 
-### Game State Access Patterns
+**Usage**: Script automatically monitors your resources and plays warning sounds.
 
-**DOM-based approach** (recommended for userscripts):
-```javascript
-// Find UI elements
-const controlPanel = document.querySelector('control-panel');
-const buildMenu = document.querySelector('build-menu');
+### 💥 OpenFront Nuke Overlay
+**File**: `openfront-overlay/openfront_nuke_overlay.user.js`
 
-// Parse displayed values
-const goldSpans = controlPanel.querySelectorAll('span[translate="no"]');
-```
+**Features**:
+- Visual blast radius overlay for nuclear weapons
+- Tab key cycling: None → Atom Bomb (30 tiles) → Hydrogen Bomb (100 tiles)
+- Real-time mouse tracking with game coordinate integration
+- Outline-only display that scales correctly with zoom levels
+- Accurate radius values extracted from game source code
 
-**Direct game object access** (more fragile):
-```javascript
-// Look for elements with game state
-const gameElements = document.querySelectorAll('[class*="game"]');
-const gameObj = element._game || element.game;
-const player = gameObj.myPlayer();
-const gold = player.gold(); // Returns bigint
-```
+**Usage**: Press Tab to cycle through overlay modes, move mouse to position the radius indicator.
 
-## Userscript Development with Tampermonkey
+## Installation
 
-### Platform
-We use **Tampermonkey** (browser extension) to inject JavaScript into the OpenFront.io website. Scripts run in the browser alongside the game.
+### Prerequisites
+1. Install the [Tampermonkey](https://www.tampermonkey.net/) browser extension
+2. Ensure you have access to OpenFront.io
 
-### Script Structure Template
-```javascript
-// ==UserScript==
-// @name         Script Name
-// @namespace    https://openfront.io
-// @version      1.0
-// @description  Brief description
-// @match        https://openfront.io/*
-// @match        https://www.openfront.io/*
-// @match        http://localhost:9000/*
-// @match        http://localhost:*/*
-// @match        http://127.0.0.1:*/*
-// @grant        none
-// @run-at       document-end
-// ==/UserScript==
+### Installing Scripts
+1. Click on the Tampermonkey extension icon in your browser
+2. Select "Create a new script"
+3. Copy the contents of any `.user.js` file from this repository
+4. Paste into the Tampermonkey editor
+5. Save the script (Ctrl+S)
+6. The script will automatically activate when you visit OpenFront.io
 
-(function() {
-    'use strict';
-    
-    console.log('[Script Name] Script loaded');
-    
-    // Your code here
-    
-})();
-```
+## Browser Compatibility
 
-### Common Patterns and Best Practices
+- ✅ **Chrome** - Fully supported
+- ✅ **Firefox** - Fully supported  
+- ✅ **Edge** - Fully supported
+- ⚠️ **Safari** - Limited Tampermonkey support
 
-#### 1. Game State Detection
-```javascript
-function isInGame() {
-    const gameCanvas = document.querySelector('canvas');
-    const controlPanel = document.querySelector('control-panel');
-    const gameLeftSidebar = document.querySelector('game-left-sidebar');
-    return !!(gameCanvas && controlPanel && gameLeftSidebar);
-}
-```
+**Requirements**:
+- Modern browser with ES6+ support
+- HTML5 Canvas API
+- Web Audio API (for warning sounds)
 
-#### 2. Resource Reading
-```javascript
-function getCurrentGold() {
-    const controlPanel = document.querySelector('control-panel');
-    if (!controlPanel) return null;
-    
-    const goldSpans = controlPanel.querySelectorAll('span[translate="no"]');
-    for (const span of goldSpans) {
-        const text = span.textContent;
-        const match = text.match(/^([\d,]+(?:\.\d+)?)\s*([kKmM]?)$/);
-        if (match) {
-            let value = parseFloat(match[1].replace(/,/g, ''));
-            const suffix = match[2].toLowerCase();
-            if (suffix === 'k') value *= 1000;
-            if (suffix === 'm') value *= 1000000;
-            return Math.floor(value);
-        }
-    }
-    return null;
-}
-```
+## Contributing
 
-#### 3. Menu Interaction (Build Menu Example)
-```javascript
-function openBuildMenu(mouseX, mouseY) {
-    const canvas = document.querySelector('canvas');
-    const isMac = /Mac/.test(navigator.userAgent);
-    
-    canvas.dispatchEvent(new PointerEvent('pointerup', {
-        clientX: mouseX,
-        clientY: mouseY,
-        ctrlKey: !isMac,
-        metaKey: isMac
-    }));
-}
+Contributions are welcome! When developing new scripts:
 
-function clickBuildingButton(buildMenu, iconName) {
-    const buttons = buildMenu.shadowRoot.querySelectorAll('button');
-    for (const button of buttons) {
-        const img = button.querySelector('img');
-        if (img && img.src.includes(iconName)) {
-            if (!button.disabled) {
-                button.click();
-            }
-            break;
-        }
-    }
-}
-```
+1. Follow the established code patterns
+2. Include comprehensive error handling
+3. Test thoroughly in actual game sessions
+4. Use semantic DOM selectors when possible
+5. Minimize performance impact on the game
 
-#### 4. Audio Generation
-```javascript
-function playWarningSound() {
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 800; // Hz
-    oscillator.type = 'sine';
-    
-    // Fade in/out to avoid clicks
-    const now = audioContext.currentTime;
-    const duration = 0.5; // seconds
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
-    gainNode.gain.linearRampToValueAtTime(0.3, now + duration - 0.01);
-    gainNode.gain.linearRampToValueAtTime(0, now + duration);
-    
-    oscillator.start(now);
-    oscillator.stop(now + duration);
-}
-```
-
-#### 5. Game State Monitoring
-```javascript
-let gameStarted = false;
-
-function monitorGameState() {
-    if (!isInGame()) {
-        if (gameStarted) {
-            // Player left game, reset state
-            gameStarted = false;
-            resetScriptState();
-        }
-        return;
-    }
-    
-    if (!gameStarted) {
-        // Player entered game
-        gameStarted = true;
-        initializeScript();
-    }
-    
-    // Main monitoring logic here
-}
-
-setInterval(monitorGameState, 500); // Check every 500ms
-```
-
-### Logging Best Practices
-- Use consistent prefixes: `[Script Name] Message`
-- Minimize spam - only log important events
-- Use styled console messages for warnings:
-```javascript
-console.log('%c⚠️ WARNING MESSAGE', 
-           'background: red; color: white; font-weight: bold; padding: 5px;');
-```
-
-### Browser Compatibility
-- Target modern browsers (Chrome, Firefox, Edge)
-- Use standard Web APIs (DOM, Web Audio, etc.)
-- No external dependencies - scripts must be self-contained
-- Handle browser autoplay policies for audio
-
-## Existing Scripts
-
-### openfront-hotkeys
-**Purpose**: Keyboard shortcuts for building structures and launching nukes
-**Key Features**: 
-- Invisible build menu manipulation
-- Turbo mode for rapid building
-- Hotkey mapping (C=City, Q=Port, etc.)
-
-### openfront-warnings  
-**Purpose**: Audio alerts for game events
-**Current Implementation**: Gold threshold warning at 125k
-**Key Features**:
-- Game state detection
-- Resource monitoring
-- Audio generation
-
-## Common Challenges & Solutions
-
-### 1. Game Updates Breaking Scripts
-**Problem**: Game UI changes can break DOM selectors
-**Solution**: Use semantic selectors when possible, fallback methods
-
-### 2. Shadow DOM Access
-**Problem**: Build menu uses Shadow DOM
-**Solution**: Access via `element.shadowRoot.querySelector()`
-
-### 3. Audio Context Restrictions
-**Problem**: Browser autoplay policies prevent audio
-**Solution**: Initialize audio context after user interaction
-
-### 4. Performance Concerns
-**Problem**: Continuous monitoring can impact performance
-**Solution**: Use reasonable intervals (500ms), efficient selectors
-
-### 5. Game State Transitions
-**Problem**: Detecting lobby vs. active game
-**Solution**: Check for multiple UI elements simultaneously
-
-## Development Workflow
-
-1. **Research**: Examine OpenFrontIO source code to understand game mechanics
-2. **Plan**: Identify DOM elements and interaction patterns needed
-3. **Develop**: Write userscript with proper error handling
-4. **Test**: Verify functionality in actual game sessions
-5. **Document**: Update CONTEXT_FOR_LLM.txt with implementation details
-6. **Maintain**: Monitor for game updates that might break functionality
+### Development Tips
+- The game uses Shadow DOM for some elements
+- Game state changes frequently - use robust detection methods
+- Browser autoplay policies affect audio - initialize after user interaction
+- Target 500ms intervals for monitoring to balance responsiveness and performance
 
 ## Repository Structure
 
 ```
 openfront-utilities/
-├── README.md (this file)
+├── README.md
+├── .gitignore
 ├── openfront-hotkeys/
-│   ├── openfront_hotkeys.user.js
-│   └── CONTEXT_FOR_LLM.txt
+│   └── openfront_hotkeys.user.js
+├── openfront-overlay/
+│   └── openfront_nuke_overlay.user.js
 └── openfront-warnings/
-    ├── openfront_gold_warning.user.js
-    └── CONTEXT_FOR_LLM.txt
+    └── openfront_gold_warning.user.js
 ```
 
-Each script directory contains:
-- `.user.js` - The Tampermonkey userscript
-- `CONTEXT_FOR_LLM.txt` - Detailed technical documentation
+## License
 
-## Getting Started for New LLMs
+These scripts are provided as-is for educational and enhancement purposes. Use responsibly and in accordance with OpenFront.io's terms of service.
 
-1. **Read the game context**: Start with this README
-2. **Examine existing scripts**: Look at openfront-hotkeys for complex examples
-3. **Check the OpenFrontIO source**: Use `../OpenFrontIO/` to understand game internals
-4. **Read CONTEXT files**: Each script has detailed implementation notes
-5. **Follow the patterns**: Use established conventions for consistency
+## Support
 
-## Important Notes for LLMs
+If you encounter issues:
 
-- **Game changes frequently**: Always verify current DOM structure
-- **User experience matters**: Scripts should enhance, not disrupt gameplay
-- **Performance is critical**: The game runs real-time, avoid heavy operations
-- **Security first**: Never access sensitive data or make external requests
-- **Test thoroughly**: Game mechanics can be complex and scripts must handle edge cases
+1. Check the browser console for error messages
+2. Verify the script is enabled in Tampermonkey
+3. Ensure you're using a compatible browser
+4. Try refreshing the OpenFront.io page
 
-This context should provide sufficient background for developing robust, maintainable OpenFront.io userscripts.
+For bugs or feature requests, please open an issue in this repository.
+
+---
+
+**Disclaimer**: These userscripts are community-created tools and are not officially affiliated with or endorsed by OpenFront.io. Use at your own discretion.
