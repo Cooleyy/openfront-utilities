@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OpenFront Gold Warning
 // @namespace    https://openfront.io
-// @version      1.0
+// @version      1.1
 // @description  Audio warning when your gold reaches 125k for the first time in a game
 // @match        https://openfront.io/*
 // @match        https://www.openfront.io/*
@@ -15,7 +15,7 @@
 (function() {
     'use strict';
 
-    console.log('[OpenFront Gold Warning v1.0] Script loaded');
+    console.log('[OpenFront Gold Warning v1.1] Script loaded');
 
     // Configuration
     const GOLD_THRESHOLD = 125000; // 125k gold
@@ -83,18 +83,45 @@
             if (!controlPanel) return null;
 
             // Look for the gold display in the control panel
-            // The gold is shown in a span with translate="no" attribute
+            // Based on the structure, gold comes after troops
             const goldSpans = controlPanel.querySelectorAll('span[translate="no"]');
-
+            let foundTroopSection = false;
+            
             for (let i = 0; i < goldSpans.length; i++) {
                 const span = goldSpans[i];
                 const text = span.textContent || span.innerText;
 
                 if (!text) continue;
 
-                // Look for patterns that match gold display (numbers with possible K/M suffixes)
-                // The gold display format from renderNumber function can be like "125,000" or "125k" etc.
-                const goldMatch = text.match(/^([\d,]+(?:\.\d+)?)\s*([kKmM]?)$/);
+                // If this span contains "/", it's the main troop display
+                if (text.includes('/')) {
+                    foundTroopSection = true;
+                    continue;
+                }
+                
+                // Skip parentheses-only spans (troop rate indicators)
+                if (text.includes('(') && text.includes(')') && !text.match(/^\d+/)) {
+                    continue;
+                }
+                
+                // If we haven't found the troop section yet, keep looking
+                if (!foundTroopSection) {
+                    continue;
+                }
+
+                // Look for gold pattern - could be "0 (+0)" format or simple number
+                let goldText = text;
+                if (text.includes('(') && text.includes(')')) {
+                    // Extract number before parentheses: "0 (+0)" -> "0"
+                    const match = text.match(/^([\d,]+(?:\.\d+)?[kKmM]?)/);
+                    if (match) {
+                        goldText = match[1].trim();
+                    } else {
+                        continue;
+                    }
+                }
+                
+                const goldMatch = goldText.match(/^([\d,]+(?:\.\d+)?)\s*([kKmM]?)$/);
                 if (goldMatch) {
                     let value = parseFloat(goldMatch[1].replace(/,/g, ''));
                     const suffix = goldMatch[2].toLowerCase();
@@ -105,8 +132,8 @@
                         value *= 1000000;
                     }
 
-                    // Verify this looks like a gold amount (reasonable range)
-                    if (value >= 0 && value <= 10000000) { // Max 10M gold seems reasonable
+                    // Gold should be in reasonable range
+                    if (value >= 0 && value <= 10000000) {
                         return Math.floor(value);
                     }
                 }
@@ -175,6 +202,9 @@
         if (currentGold === null) {
             return;
         }
+        
+        // Log current detected gold
+        console.log(`[OpenFront Gold Warning] Current gold: ${currentGold}`);
 
         if (!playerFound) {
             playerFound = true;
