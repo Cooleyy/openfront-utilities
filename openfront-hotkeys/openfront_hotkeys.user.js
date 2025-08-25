@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         OpenFront Building Hotkeys
 // @namespace    https://openfront.io
-// @version      1.4
+// @version      1.5
 // @description  Hotkeys for buildings and nukes in OpenFront.io with optimized menu
 // @match        https://openfront.io/*
 // @match        https://www.openfront.io/*
@@ -15,12 +15,13 @@
 (function() {
     'use strict';
 
-    console.log('[OpenFront Hotkeys v1.4] Script loaded');
+    console.log('[OpenFront Hotkeys v1.5] Script loaded');
 
     // Hotkey configuration
     const HOTKEYS = {
         'KeyC': { icon: 'CityIconWhite', name: 'City', shift: false },
         'KeyQ': { icon: 'PortIcon', name: 'Port', shift: false },
+        'KeyA': { icon: 'FactoryIconWhite', name: 'Factory', shift: false },
         'KeyW': { icon: 'BattleshipIconWhite', name: 'Warship', shift: false },
         'KeyS': { icon: 'MissileSiloIconWhite', name: 'Missile Silo', shift: false },
         'KeyD': { icon: 'ShieldIconWhite', name: 'Defense Post', shift: false },
